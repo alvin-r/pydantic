@@ -1,14 +1,15 @@
 import sys
 import typing
 from collections.abc import Callable
+from functools import lru_cache
 from os import PathLike
 from typing import (  # type: ignore
     TYPE_CHECKING,
     AbstractSet,
     Any,
-    Callable as TypingCallable,
     ClassVar,
     Dict,
+    Final,
     ForwardRef,
     Generator,
     Iterable,
@@ -26,12 +27,18 @@ from typing import (  # type: ignore
     cast,
     get_type_hints,
 )
+from typing import (
+    Callable as TypingCallable,
+)
 
 from typing_extensions import (
     Annotated,
-    Final,
     Literal,
+)
+from typing_extensions import (
     NotRequired as TypedDictNotRequired,
+)
+from typing_extensions import (
     Required as TypedDictRequired,
 )
 
@@ -111,8 +118,7 @@ else:
     from typing import get_origin as _typing_get_origin
 
     def get_origin(tp: Type[Any]) -> Optional[Type[Any]]:
-        """
-        We can't directly use `typing.get_origin` since we need a fallback to support
+        """We can't directly use `typing.get_origin` since we need a fallback to support
         custom generic classes like `ConstrainedList`
         It should be useless once https://github.com/cython/cython/issues/3537 is
         solved and https://github.com/pydantic/pydantic/pull/1753 is merged.
@@ -144,8 +150,7 @@ else:
     from typing import get_args as _typing_get_args
 
     def _generic_get_args(tp: Type[Any]) -> Tuple[Any, ...]:
-        """
-        In python 3.9, `typing.Dict`, `typing.List`, ...
+        """In python 3.9, `typing.Dict`, `typing.List`, ...
         do have an empty `__args__` by default (instead of the generic ~T for example).
         In order to still support `Dict` for example and consider it as `Dict[Any, Any]`,
         we retrieve the `_nparams` value that tells us how many parameters it needs.
@@ -197,8 +202,7 @@ else:
     from typing_extensions import _AnnotatedAlias
 
     def convert_generics(tp: Type[Any]) -> Type[Any]:
-        """
-        Recursively searches for `str` type hints and replaces them with ForwardRef.
+        """Recursively searches for `str` type hints and replaces them with ForwardRef.
 
         Examples::
             convert_generics(list['Hero']) == list[ForwardRef('Hero')]
@@ -231,7 +235,7 @@ else:
             return _UnionGenericAlias(origin, converted)
         else:
             try:
-                setattr(tp, '__args__', converted)
+                tp.__args__ = converted
             except AttributeError:
                 pass
             return tp
@@ -376,8 +380,7 @@ def display_as_type(v: Type[Any]) -> str:
 
 
 def resolve_annotations(raw_annotations: Dict[str, Type[Any]], module_name: Optional[str]) -> Dict[str, Type[Any]]:
-    """
-    Partially taken from typing.get_type_hints.
+    """Partially taken from typing.get_type_hints.
 
     Resolve string or ForwardRef annotations into type objects if possible.
     """
@@ -415,29 +418,36 @@ def is_callable_type(type_: Type[Any]) -> bool:
 
 
 def is_literal_type(type_: Type[Any]) -> bool:
-    return Literal is not None and get_origin(type_) in LITERAL_TYPES
+    # Direct comparison will be faster than function call
+    return get_origin(type_) in LITERAL_TYPES if Literal is not None else False
 
 
+@lru_cache(maxsize=None)
 def literal_values(type_: Type[Any]) -> Tuple[Any, ...]:
+    # Caching the get_args result since it doesn't change for the same input type
     return get_args(type_)
 
 
+@lru_cache(maxsize=None)
 def all_literal_values(type_: Type[Any]) -> Tuple[Any, ...]:
-    """
-    This method is used to retrieve all Literal values as
+    """This method is used to retrieve all Literal values as
     Literal can be used recursively (see https://www.python.org/dev/peps/pep-0586)
     e.g. `Literal[Literal[Literal[1, 2, 3], "foo"], 5, None]`
     """
+    # Cached version to store previously computed results and avoid recursion overhead
     if not is_literal_type(type_):
         return (type_,)
 
     values = literal_values(type_)
-    return tuple(x for value in values for x in all_literal_values(value))
+    # Using a list comprehension and extending the list for efficiency
+    result = []
+    for value in values:
+        result.extend(all_literal_values(value))
+    return tuple(result)
 
 
 def is_namedtuple(type_: Type[Any]) -> bool:
-    """
-    Check if a given class is a named tuple.
+    """Check if a given class is a named tuple.
     It can be either a `typing.NamedTuple` or `collections.namedtuple`
     """
     from pydantic.v1.utils import lenient_issubclass
@@ -446,8 +456,7 @@ def is_namedtuple(type_: Type[Any]) -> bool:
 
 
 def is_typeddict(type_: Type[Any]) -> bool:
-    """
-    Check if a given class is a typed dict (from `typing` or `typing_extensions`)
+    """Check if a given class is a typed dict (from `typing` or `typing_extensions`)
     In 3.10, there will be a public method (https://docs.python.org/3.10/library/typing.html#typing.is_typeddict)
     """
     from pydantic.v1.utils import lenient_issubclass
@@ -460,8 +469,7 @@ def _check_typeddict_special(type_: Any) -> bool:
 
 
 def is_typeddict_special(type_: Any) -> bool:
-    """
-    Check if type is a TypedDict special form (Required or NotRequired).
+    """Check if type is a TypedDict special form (Required or NotRequired).
     """
     return _check_typeddict_special(type_) or _check_typeddict_special(get_origin(type_))
 
@@ -470,8 +478,7 @@ test_type = NewType('test_type', str)
 
 
 def is_new_type(type_: Type[Any]) -> bool:
-    """
-    Check whether type_ was created using typing.NewType
+    """Check whether type_ was created using typing.NewType
     """
     return isinstance(type_, test_type.__class__) and hasattr(type_, '__supertype__')  # type: ignore
 
@@ -490,8 +497,7 @@ def _check_classvar(v: Optional[Type[Any]]) -> bool:
 
 
 def _check_finalvar(v: Optional[Type[Any]]) -> bool:
-    """
-    Check if a given type is a `typing.Final` type.
+    """Check if a given type is a `typing.Final` type.
     """
     if v is None:
         return False
@@ -516,8 +522,7 @@ def is_finalvar(ann_type: Type[Any]) -> bool:
 
 
 def update_field_forward_refs(field: 'ModelField', globalns: Any, localns: Any) -> None:
-    """
-    Try to update ForwardRefs on fields based on this ModelField, globalns and localns.
+    """Try to update ForwardRefs on fields based on this ModelField, globalns and localns.
     """
     prepare = False
     if field.type_.__class__ == ForwardRef:
@@ -544,8 +549,7 @@ def update_model_forward_refs(
     localns: 'DictStrAny',
     exc_to_suppress: Tuple[Type[BaseException], ...] = (),
 ) -> None:
-    """
-    Try to update model fields ForwardRefs based on model and localns.
+    """Try to update model fields ForwardRefs based on model and localns.
     """
     if model.__module__ in sys.modules:
         globalns = sys.modules[model.__module__].__dict__.copy()
@@ -577,8 +581,7 @@ def update_model_forward_refs(
 
 
 def get_class(type_: Type[Any]) -> Union[None, bool, Type[Any]]:
-    """
-    Tries to get the class of a Type[T] annotation. Returns True if Type is used
+    """Tries to get the class of a Type[T] annotation. Returns True if Type is used
     without brackets. Otherwise returns None.
     """
     if type_ is type:
@@ -595,8 +598,7 @@ def get_class(type_: Type[Any]) -> Union[None, bool, Type[Any]]:
 
 
 def get_sub_types(tp: Any) -> List[Any]:
-    """
-    Return all the types that are allowed by type `tp`
+    """Return all the types that are allowed by type `tp`
     `tp` can be a `Union` of allowed types or an `Annotated` type
     """
     origin = get_origin(tp)
