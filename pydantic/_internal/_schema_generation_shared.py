@@ -105,7 +105,7 @@ class CallbackGetCoreSchemaHandler(GetCoreSchemaHandler):
         """Resolves reference in the core schema.
 
         Args:
-            maybe_ref_schema: The input core schema that may contains reference.
+            maybe_ref_schema: The input core schema that may contain reference.
 
         Returns:
             Resolved core schema.
@@ -113,14 +113,19 @@ class CallbackGetCoreSchemaHandler(GetCoreSchemaHandler):
         Raises:
             LookupError: If it can't find the definition for reference.
         """
-        if maybe_ref_schema['type'] == 'definition-ref':
+        schema_type = maybe_ref_schema['type']
+
+        if schema_type == 'definition-ref':
             ref = maybe_ref_schema['schema_ref']
-            if ref not in self._generate_schema.defs.definitions:
+            definitions = self._generate_schema.defs.definitions
+            if ref not in definitions:
                 raise LookupError(
                     f'Could not find a ref for {ref}.'
                     ' Maybe you tried to call resolve_ref_schema from within a recursive model?'
                 )
-            return self._generate_schema.defs.definitions[ref]
-        elif maybe_ref_schema['type'] == 'definitions':
+            return definitions[ref]
+
+        if schema_type == 'definitions':
             return self.resolve_ref_schema(maybe_ref_schema['schema'])
+
         return maybe_ref_schema
