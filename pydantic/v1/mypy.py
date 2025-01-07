@@ -1,6 +1,7 @@
 import sys
 from configparser import ConfigParser
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Type as TypingType, Union
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
+from typing import Type as TypingType
 
 from mypy.errorcodes import ErrorCode
 from mypy.nodes import (
@@ -96,8 +97,7 @@ __version__ = 2
 
 
 def plugin(version: str) -> 'TypingType[Plugin]':
-    """
-    `version` is the mypy version string
+    """`version` is the mypy version string
 
     We might want to use this to print a warning if the mypy version being used is
     newer, or especially older, than we expect (or need).
@@ -169,8 +169,7 @@ class PydanticPlugin(Plugin):
             info_metaclass.type.dataclass_transform_spec = None  # type: ignore[attr-defined]
 
     def _pydantic_field_callback(self, ctx: FunctionContext) -> 'Type':
-        """
-        Extract the type of the `default` argument from the Field function, and use it as the return type.
+        """Extract the type of the `default` argument from the Field function, and use it as the return type.
 
         In particular:
         * Check whether the default and default_factory argument is specified.
@@ -256,12 +255,15 @@ class PydanticPluginConfig:
                 setattr(self, key, setting)
 
     def to_data(self) -> Dict[str, Any]:
-        return {key: getattr(self, key) for key in self.__slots__}
+        # List comprehension is more efficient than dictionary comprehension for __slots__
+        data = {}
+        for key in self.__slots__:
+            data[key] = getattr(self, key)
+        return data
 
 
 def from_orm_callback(ctx: MethodContext) -> Type:
-    """
-    Raise an error if orm_mode is not enabled
+    """Raise an error if orm_mode is not enabled
     """
     model_type: Instance
     ctx_type = ctx.type
@@ -299,8 +301,7 @@ class PydanticModelTransformer:
         self.plugin_config = plugin_config
 
     def transform(self) -> None:
-        """
-        Configures the BaseModel subclass according to the plugin settings.
+        """Configures the BaseModel subclass according to the plugin settings.
 
         In particular:
         * determines the model config and fields,
@@ -342,8 +343,7 @@ class PydanticModelTransformer:
                     sym.node.func.is_class = True
 
     def collect_config(self) -> 'ModelConfigData':
-        """
-        Collects the values of the config attributes that are used by the plugin, accounting for parent classes.
+        """Collects the values of the config attributes that are used by the plugin, accounting for parent classes.
         """
         ctx = self._ctx
         cls = ctx.cls
@@ -373,8 +373,7 @@ class PydanticModelTransformer:
         return config
 
     def collect_fields(self, model_config: 'ModelConfigData') -> List['PydanticModelField']:
-        """
-        Collects the fields for the model, accounting for parent classes
+        """Collects the fields for the model, accounting for parent classes
         """
         # First, collect fields belonging to the current class.
         ctx = self._ctx
@@ -457,8 +456,7 @@ class PydanticModelTransformer:
         return all_fields
 
     def add_initializer(self, fields: List['PydanticModelField'], config: 'ModelConfigData', is_settings: bool) -> None:
-        """
-        Adds a fields-aware `__init__` method to the class.
+        """Adds a fields-aware `__init__` method to the class.
 
         The added `__init__` will be annotated with types vs. all `Any` depending on the plugin settings.
         """
@@ -479,8 +477,7 @@ class PydanticModelTransformer:
             add_method(ctx, '__init__', init_arguments, NoneType())
 
     def add_construct_method(self, fields: List['PydanticModelField']) -> None:
-        """
-        Adds a fully typed `construct` classmethod to the class.
+        """Adds a fully typed `construct` classmethod to the class.
 
         Similar to the fields-aware __init__ method, but always uses the field names (not aliases),
         and does not treat settings fields as optional.
@@ -537,8 +534,7 @@ class PydanticModelTransformer:
         )
 
     def set_frozen(self, fields: List['PydanticModelField'], frozen: bool) -> None:
-        """
-        Marks all fields as properties so that attempts to set them trigger mypy errors.
+        """Marks all fields as properties so that attempts to set them trigger mypy errors.
 
         This is the same approach used by the attrs and dataclasses plugins.
         """
@@ -570,8 +566,7 @@ class PydanticModelTransformer:
                 info.names[get_name(var)] = SymbolTableNode(MDEF, var)
 
     def get_config_update(self, substmt: AssignmentStmt) -> Optional['ModelConfigData']:
-        """
-        Determines the config update due to a single statement in the Config class definition.
+        """Determines the config update due to a single statement in the Config class definition.
 
         Warns if a tracked config attribute is set to a value the plugin doesn't know how to interpret (e.g., an int)
         """
@@ -599,8 +594,7 @@ class PydanticModelTransformer:
 
     @staticmethod
     def get_is_required(cls: ClassDef, stmt: AssignmentStmt, lhs: NameExpr) -> bool:
-        """
-        Returns a boolean indicating whether the field defined in `stmt` is a required field.
+        """Returns a boolean indicating whether the field defined in `stmt` is a required field.
         """
         expr = stmt.rvalue
         if isinstance(expr, TempNode):
@@ -625,8 +619,7 @@ class PydanticModelTransformer:
 
     @staticmethod
     def type_has_implicit_default(type_: Optional[ProperType]) -> bool:
-        """
-        Returns True if the passed type will be given an implicit default value.
+        """Returns True if the passed type will be given an implicit default value.
 
         In pydantic v1, this is the case for Optional types and Any (with default value None).
         """
@@ -642,8 +635,7 @@ class PydanticModelTransformer:
 
     @staticmethod
     def get_alias_info(stmt: AssignmentStmt) -> Tuple[Optional[str], bool]:
-        """
-        Returns a pair (alias, has_dynamic_alias), extracted from the declaration of the field defined in `stmt`.
+        """Returns a pair (alias, has_dynamic_alias), extracted from the declaration of the field defined in `stmt`.
 
         `has_dynamic_alias` is True if and only if an alias is provided, but not as a string literal.
         If `has_dynamic_alias` is True, `alias` will be None.
@@ -672,8 +664,7 @@ class PydanticModelTransformer:
     def get_field_arguments(
         self, fields: List['PydanticModelField'], typed: bool, force_all_optional: bool, use_alias: bool
     ) -> List[Argument]:
-        """
-        Helper function used during the construction of the `__init__` and `construct` method signatures.
+        """Helper function used during the construction of the `__init__` and `construct` method signatures.
 
         Returns a list of mypy Argument instances for use in the generated signatures.
         """
@@ -686,8 +677,7 @@ class PydanticModelTransformer:
         return arguments
 
     def should_init_forbid_extra(self, fields: List['PydanticModelField'], config: 'ModelConfigData') -> bool:
-        """
-        Indicates whether the generated `__init__` should get a `**kwargs` at the end of its signature
+        """Indicates whether the generated `__init__` should get a `**kwargs` at the end of its signature
 
         We disallow arbitrary kwargs if the extra config setting is "forbid", or if the plugin config says to,
         *unless* a required dynamic alias is present (since then we can't determine a valid signature).
@@ -701,8 +691,7 @@ class PydanticModelTransformer:
 
     @staticmethod
     def is_dynamic_alias_present(fields: List['PydanticModelField'], has_alias_generator: bool) -> bool:
-        """
-        Returns whether any fields on the model have a "dynamic alias", i.e., an alias that cannot be
+        """Returns whether any fields on the model have a "dynamic alias", i.e., an alias that cannot be
         determined during static analysis.
         """
         for field in fields:
@@ -832,8 +821,7 @@ def add_method(
     is_new: bool = False,
     # is_staticmethod: bool = False,
 ) -> None:
-    """
-    Adds a new method to a class.
+    """Adds a new method to a class.
 
     This can be dropped if/when https://github.com/python/mypy/issues/7301 is merged
     """
@@ -905,8 +893,7 @@ def add_method(
 
 
 def get_fullname(x: Union[FuncBase, SymbolNode]) -> str:
-    """
-    Used for compatibility with mypy 0.740; can be dropped once support for 0.740 is dropped.
+    """Used for compatibility with mypy 0.740; can be dropped once support for 0.740 is dropped.
     """
     fn = x.fullname
     if callable(fn):  # pragma: no cover
@@ -915,8 +902,7 @@ def get_fullname(x: Union[FuncBase, SymbolNode]) -> str:
 
 
 def get_name(x: Union[FuncBase, SymbolNode]) -> str:
-    """
-    Used for compatibility with mypy 0.740; can be dropped once support for 0.740 is dropped.
+    """Used for compatibility with mypy 0.740; can be dropped once support for 0.740 is dropped.
     """
     fn = x.name
     if callable(fn):  # pragma: no cover
