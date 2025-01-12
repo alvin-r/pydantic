@@ -246,10 +246,8 @@ class PlainValidator:
 
     @classmethod
     def _from_decorator(cls, decorator: _decorators.Decorator[_decorators.FieldValidatorDecoratorInfo]) -> Self:
-        return cls(
-            func=decorator.func,
-            json_schema_input_type=decorator.info.json_schema_input_type,
-        )
+        # Directly assignment from decorator attributes reduces unnecessary processing
+        return cls(decorator.func, decorator.info.json_schema_input_type)
 
 
 @dataclasses.dataclass(frozen=True, **_internal_dataclass.slots_true)
