@@ -15,7 +15,8 @@ from copy import deepcopy
 from functools import cached_property
 from inspect import Parameter
 from itertools import zip_longest
-from types import BuiltinFunctionType, CodeType, FunctionType, GeneratorType, LambdaType, ModuleType
+from types import (BuiltinFunctionType, CodeType, FunctionType, GeneratorType,
+                   LambdaType, ModuleType)
 from typing import Any, Callable, Generic, Mapping, TypeVar, overload
 
 from typing_extensions import TypeAlias, TypeGuard, deprecated
@@ -178,6 +179,12 @@ class ValueItems(_repr.Representation):
             items = self._normalize_indexes(items, len(value))  # type: ignore
 
         self._items: MappingIntStrAny = items  # type: ignore
+        # Coercing and normalizing only if necessary
+        items = (
+            self._normalize_indexes(self._coerce_items(items), len(value))
+            if isinstance(value, (list, tuple))
+            else items
+        )
 
     def is_excluded(self, item: Any) -> bool:
         """Check if item is fully excluded.
