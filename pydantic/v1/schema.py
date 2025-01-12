@@ -5,6 +5,7 @@ from dataclasses import is_dataclass
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from enum import Enum
+from functools import lru_cache
 from ipaddress import IPv4Address, IPv4Interface, IPv4Network, IPv6Address, IPv6Interface, IPv6Network
 from pathlib import Path
 from typing import (
@@ -115,8 +116,7 @@ def schema(
     ref_prefix: Optional[str] = None,
     ref_template: str = default_ref_template,
 ) -> Dict[str, Any]:
-    """
-    Process a list of models and generate a single JSON Schema with all of them defined in the ``definitions``
+    """Process a list of models and generate a single JSON Schema with all of them defined in the ``definitions``
     top-level JSON key, including their sub-models.
 
     :param models: a list of models to include in the generated JSON Schema
@@ -165,8 +165,7 @@ def model_schema(
     ref_prefix: Optional[str] = None,
     ref_template: str = default_ref_template,
 ) -> Dict[str, Any]:
-    """
-    Generate a JSON Schema for one model. With all the sub-models defined in the ``definitions`` top-level
+    """Generate a JSON Schema for one model. With all the sub-models defined in the ``definitions`` top-level
     JSON key.
 
     :param model: a Pydantic model (a class that inherits from BaseModel)
@@ -228,8 +227,7 @@ def field_schema(
     ref_template: str = default_ref_template,
     known_models: Optional[TypeModelSet] = None,
 ) -> Tuple[Dict[str, Any], Dict[str, Any], Set[str]]:
-    """
-    Process a Pydantic field and return a tuple with a JSON Schema for it as the first item.
+    """Process a Pydantic field and return a tuple with a JSON Schema for it as the first item.
     Also return a dictionary of definitions with models as keys and their schemas as values. If the passed field
     is a model and has sub-models, and those sub-models don't have overrides (as ``title``, ``default``, etc), they
     will be included in the definitions and referenced in the schema instead of included recursively.
@@ -287,8 +285,7 @@ _numeric_types_attrs: Tuple[Tuple[str, Union[type, Tuple[type, ...]], str], ...]
 
 
 def get_field_schema_validations(field: ModelField) -> Dict[str, Any]:
-    """
-    Get the JSON Schema validation keywords for a ``field`` with an annotation of
+    """Get the JSON Schema validation keywords for a ``field`` with an annotation of
     a Pydantic ``FieldInfo`` with validation arguments.
     """
     f_schema: Dict[str, Any] = {}
@@ -320,8 +317,7 @@ def get_field_schema_validations(field: ModelField) -> Dict[str, Any]:
 
 
 def get_model_name_map(unique_models: TypeModelSet) -> Dict[TypeModelOrEnum, str]:
-    """
-    Process a set of models and generate unique names for them to be used as keys in the JSON Schema
+    """Process a set of models and generate unique names for them to be used as keys in the JSON Schema
     definitions. By default the names are the same as the class name. But if two models in different Python
     modules have the same name (e.g. "users.Model" and "items.Model"), the generated names will be
     based on the Python module path for those conflicting models to prevent name collisions.
@@ -347,8 +343,7 @@ def get_model_name_map(unique_models: TypeModelSet) -> Dict[TypeModelOrEnum, str
 
 
 def get_flat_models_from_model(model: Type['BaseModel'], known_models: Optional[TypeModelSet] = None) -> TypeModelSet:
-    """
-    Take a single ``model`` and generate a set with itself and all the sub-models in the tree. I.e. if you pass
+    """Take a single ``model`` and generate a set with itself and all the sub-models in the tree. I.e. if you pass
     model ``Foo`` (subclass of Pydantic ``BaseModel``) as ``model``, and it has a field of type ``Bar`` (also
     subclass of ``BaseModel``) and that model ``Bar`` has a field of type ``Baz`` (also subclass of ``BaseModel``),
     the return value will be ``set([Foo, Bar, Baz])``.
@@ -367,8 +362,7 @@ def get_flat_models_from_model(model: Type['BaseModel'], known_models: Optional[
 
 
 def get_flat_models_from_field(field: ModelField, known_models: TypeModelSet) -> TypeModelSet:
-    """
-    Take a single Pydantic ``ModelField`` (from a model) that could have been declared as a subclass of BaseModel
+    """Take a single Pydantic ``ModelField`` (from a model) that could have been declared as a subclass of BaseModel
     (so, it could be a submodel), and generate a set with its model and all the sub-models in the tree.
     I.e. if you pass a field that was declared to be of type ``Foo`` (subclass of BaseModel) as ``field``, and that
     model ``Foo`` has a field of type ``Bar`` (also subclass of ``BaseModel``) and that model ``Bar`` has a field of
@@ -396,8 +390,7 @@ def get_flat_models_from_field(field: ModelField, known_models: TypeModelSet) ->
 
 
 def get_flat_models_from_fields(fields: Sequence[ModelField], known_models: TypeModelSet) -> TypeModelSet:
-    """
-    Take a list of Pydantic  ``ModelField``s (from a model) that could have been declared as subclasses of ``BaseModel``
+    """Take a list of Pydantic  ``ModelField``s (from a model) that could have been declared as subclasses of ``BaseModel``
     (so, any of them could be a submodel), and generate a set with their models and all the sub-models in the tree.
     I.e. if you pass a the fields of a model ``Foo`` (subclass of ``BaseModel``) as ``fields``, and on of them has a
     field of type ``Bar`` (also subclass of ``BaseModel``) and that model ``Bar`` has a field of type ``Baz`` (also
@@ -414,8 +407,7 @@ def get_flat_models_from_fields(fields: Sequence[ModelField], known_models: Type
 
 
 def get_flat_models_from_models(models: Sequence[Type['BaseModel']]) -> TypeModelSet:
-    """
-    Take a list of ``models`` and generate a set with them and all their sub-models in their trees. I.e. if you pass
+    """Take a list of ``models`` and generate a set with them and all their sub-models in their trees. I.e. if you pass
     a list of two models, ``Foo`` and ``Bar``, both subclasses of Pydantic ``BaseModel`` as models, and ``Bar`` has
     a field of type ``Baz`` (also subclass of ``BaseModel``), the return value will be ``set([Foo, Bar, Baz])``.
     """
@@ -439,8 +431,7 @@ def field_type_schema(
     ref_prefix: Optional[str] = None,
     known_models: TypeModelSet,
 ) -> Tuple[Dict[str, Any], Dict[str, Any], Set[str]]:
-    """
-    Used by ``field_schema()``, you probably should be using that function.
+    """Used by ``field_schema()``, you probably should be using that function.
 
     Take a single ``field`` and generate the schema for its type only, not including additional
     information as title, etc. Also return additional schema definitions, from sub-models.
@@ -558,8 +549,7 @@ def model_process_schema(
     known_models: Optional[TypeModelSet] = None,
     field: Optional[ModelField] = None,
 ) -> Tuple[Dict[str, Any], Dict[str, Any], Set[str]]:
-    """
-    Used by ``model_schema()``, you probably should be using that function.
+    """Used by ``model_schema()``, you probably should be using that function.
 
     Take a single ``model`` and generate its schema. Also return additional schema definitions, from sub-models. The
     sub-models of the returned schema will be referenced, but their definitions will not be included in the schema. All
@@ -607,8 +597,7 @@ def model_type_schema(
     ref_prefix: Optional[str] = None,
     known_models: TypeModelSet,
 ) -> Tuple[Dict[str, Any], Dict[str, Any], Set[str]]:
-    """
-    You probably should be using ``model_schema()``, this function is indirectly used by that function.
+    """You probably should be using ``model_schema()``, this function is indirectly used by that function.
 
     Take a single ``model`` and generate the schema for its type only, not including additional
     information as title, etc. Also return additional schema definitions, from sub-models.
@@ -653,8 +642,7 @@ def model_type_schema(
 
 
 def enum_process_schema(enum: Type[Enum], *, field: Optional[ModelField] = None) -> Dict[str, Any]:
-    """
-    Take a single `enum` and generate its schema.
+    """Take a single `enum` and generate its schema.
 
     This is similar to the `model_process_schema` function, but applies to ``Enum`` objects.
     """
@@ -688,8 +676,7 @@ def field_singleton_sub_fields_schema(
     ref_prefix: Optional[str] = None,
     known_models: TypeModelSet,
 ) -> Tuple[Dict[str, Any], Dict[str, Any], Set[str]]:
-    """
-    This function is indirectly used by ``field_schema()``, you probably should be using that function.
+    """This function is indirectly used by ``field_schema()``, you probably should be using that function.
 
     Take a list of Pydantic ``ModelField`` from the declaration of a type with parameters, and generate their
     schema. I.e., fields used as "type parameters", like ``str`` and ``int`` in ``Tuple[str, int]``.
@@ -802,8 +789,7 @@ json_scheme = {'type': 'string', 'format': 'json-string'}
 
 
 def add_field_type_to_schema(field_type: Any, schema_: Dict[str, Any]) -> None:
-    """
-    Update the given `schema` with the type-specific metadata for the given `field_type`.
+    """Update the given `schema` with the type-specific metadata for the given `field_type`.
 
     This function looks through `field_class_to_schema` for a class that matches the given `field_type`,
     and then modifies the given `schema` with the information from that type.
@@ -833,8 +819,7 @@ def field_singleton_schema(  # noqa: C901 (ignore complexity)
     ref_prefix: Optional[str] = None,
     known_models: TypeModelSet,
 ) -> Tuple[Dict[str, Any], Dict[str, Any], Set[str]]:
-    """
-    This function is indirectly used by ``field_schema()``, you should probably be using that function.
+    """This function is indirectly used by ``field_schema()``, you should probably be using that function.
 
     Take a single Pydantic ``ModelField``, and return its schema and any additional definitions from sub-models.
     """
@@ -952,8 +937,7 @@ def field_singleton_schema(  # noqa: C901 (ignore complexity)
 
 
 def multitypes_literal_field_for_schema(values: Tuple[Any, ...], field: ModelField) -> ModelField:
-    """
-    To support `Literal` with values of different types, we split it into multiple `Literal` with same type
+    """To support `Literal` with values of different types, we split it into multiple `Literal` with same type
     e.g. `Literal['qwe', 'asd', 1, 2]` becomes `Union[Literal['qwe', 'asd'], Literal[1, 2]]`
     """
     literal_distinct_types = defaultdict(list)
@@ -1001,8 +985,7 @@ _map_types_constraint: Dict[Any, Callable[..., type]] = {int: conint, float: con
 def get_annotation_from_field_info(
     annotation: Any, field_info: FieldInfo, field_name: str, validate_assignment: bool = False
 ) -> Type[Any]:
-    """
-    Get an annotation with validation implemented for numbers and strings based on the field_info.
+    """Get an annotation with validation implemented for numbers and strings based on the field_info.
     :param annotation: an annotation from a field specification, as ``str``, ``ConstrainedStr``
     :param field_info: an instance of FieldInfo, possibly with declarations for validations and JSON Schema
     :param field_name: name of the field for use in error messages
@@ -1028,8 +1011,7 @@ def get_annotation_from_field_info(
 
 
 def get_annotation_with_constraints(annotation: Any, field_info: FieldInfo) -> Tuple[Type[Any], Set[str]]:  # noqa: C901
-    """
-    Get an annotation with used constraints implemented for numbers and strings based on the field_info.
+    """Get an annotation with used constraints implemented for numbers and strings based on the field_info.
 
     :param annotation: an annotation from a field specification, as ``str``, ``ConstrainedStr``
     :param field_info: an instance of FieldInfo, possibly with declarations for validations and JSON Schema
@@ -1147,17 +1129,14 @@ def get_annotation_with_constraints(annotation: Any, field_info: FieldInfo) -> T
     return go(annotation), used_constraints
 
 
+@lru_cache(maxsize=128)
 def normalize_name(name: str) -> str:
-    """
-    Normalizes the given name. This can be applied to either a model *or* enum.
-    """
+    """Normalizes the given name. This can be applied to either a model *or* enum."""
     return re.sub(r'[^a-zA-Z0-9.\-_]', '_', name)
 
 
 class SkipField(Exception):
-    """
-    Utility exception used to exclude fields from schema.
-    """
+    """Utility exception used to exclude fields from schema."""
 
     def __init__(self, message: str) -> None:
         self.message = message
